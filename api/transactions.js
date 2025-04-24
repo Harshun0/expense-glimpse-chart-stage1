@@ -1,70 +1,43 @@
-import mongoose from 'mongoose';
+// Use the native MongoDB driver directly rather than Mongoose
+import { MongoClient, ObjectId } from 'mongodb';
 
-// Cached connection promise
-let cachedConnection = null;
+// Connection URI
+const uri = process.env.MONGODB_URI;
+if (!uri) {
+  throw new Error('Please add your MongoDB URI to .env.local');
+}
 
-// Connection function specifically optimized for serverless
-const connectToDB = async () => {
-  // If connection exists and is ready, use it
-  if (cachedConnection && 
-      mongoose.connection.readyState === 1) {
-    console.log('Using existing MongoDB connection');
-    return mongoose.connection;
+// Cache connection
+let client;
+let clientPromise;
+
+if (process.env.NODE_ENV === 'development') {
+  // In development, use a global variable to preserve the connection across hot-reloads
+  if (!global._mongoClientPromise) {
+    client = new MongoClient(uri);
+    global._mongoClientPromise = client.connect();
   }
-  
-  try {
-    // Validate MongoDB URI
-    if (!process.env.MONGODB_URI) {
-      throw new Error('MONGODB_URI environment variable is not defined');
-    }
-    
-    // Important for serverless: set global configurations before connecting
-    mongoose.set('strictQuery', true);
-    
-    // Create a new connection promise if we don't have one
-    if (!cachedConnection) {
-      console.log('Creating new MongoDB connection promise');
-      cachedConnection = mongoose.connect(process.env.MONGODB_URI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-        // Set a reasonable timeout
-        serverSelectionTimeoutMS: 10000,
-        // This is critical for serverless environments
-        bufferCommands: true,
-      });
-    }
-    
-    // Wait for the connection
-    console.log('Awaiting MongoDB connection...');
-    await cachedConnection;
-    
-    console.log('MongoDB connected successfully:', mongoose.connection.readyState);
-    return mongoose.connection;
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    cachedConnection = null;
-    throw error;
-  }
-};
+  clientPromise = global._mongoClientPromise;
+} else {
+  // In production, create a new client for each serverless function instance
+  client = new MongoClient(uri);
+  clientPromise = client.connect();
+}
 
-// Define Schema - outside handler to optimize cold starts
-const TransactionSchema = new mongoose.Schema({
-  amount: { type: Number, required: true, min: 0.01 },
-  date: { type: Date, required: true, default: Date.now },
-  description: { type: String, required: true, trim: true },
-  type: { type: String, enum: ['income', 'expense'], required: true },
-}, { timestamps: true });
+// Helper for getting the database connection
+async function getDB() {
+  const client = await clientPromise;
+  return client.db('finance-tracker'); // Replace with your actual database name
+}
 
-// Create model function - called after connection is established
-const getTransactionModel = () => {
-  try {
-    // Try to reuse existing model
-    return mongoose.models.Transaction || mongoose.model('Transaction', TransactionSchema);
-  } catch (error) {
-    // If error, create new model
-    return mongoose.model('Transaction', TransactionSchema);
-  }
-};
+// Mapping for our transaction data
+const mapTransaction = (doc) => ({
+  id: doc._id.toString(),
+  amount: doc.amount,
+  date: doc.date,
+  description: doc.description,
+  type: doc.type
+});
 
 export default async function handler(req, res) {
   // Set CORS headers
@@ -82,67 +55,73 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Debug - Log the request details
-  console.log(`API request: ${req.method} ${req.url}`);
-  
   try {
-    // Connect to MongoDB - wait for full connection
-    console.log('Initial connection state:', mongoose.connection.readyState);
-    await connectToDB();
-    console.log('Final connection state:', mongoose.connection.readyState);
+    console.log(`API request: ${req.method} ${req.url}`);
     
-    // Get Transaction model - only after connection is established
-    const Transaction = getTransactionModel();
+    // Get database connection
+    const db = await getDB();
+    const transactions = db.collection('transactions');
     
-    // GET all transactions
+    // Route handlers
     if (req.method === 'GET') {
       console.log('Fetching all transactions');
-      // Use exec() to ensure promise is returned
-      const transactions = await Transaction.find().sort({ date: -1 }).exec();
       
-      console.log(`Found ${transactions.length} transactions`);
+      // Get all transactions sorted by date
+      const result = await transactions.find({}).sort({ date: -1 }).toArray();
+      console.log(`Found ${result.length} transactions`);
+      
       return res.status(200).json({
-        transactions: transactions.map(doc => ({
-          id: doc._id.toString(),
-          amount: doc.amount,
-          date: doc.date,
-          description: doc.description,
-          type: doc.type
-        }))
+        transactions: result.map(mapTransaction)
       });
     }
     
-    // POST new transaction
     if (req.method === 'POST') {
       console.log('Creating new transaction');
-      const transaction = new Transaction(req.body);
-      const savedTransaction = await transaction.save();
       
-      console.log('Transaction created:', savedTransaction._id);
+      // Parse request body
+      const data = JSON.parse(req.body);
+      
+      // Validate required fields
+      if (!data.amount || !data.description || !data.type) {
+        return res.status(400).json({ 
+          message: 'Missing required fields' 
+        });
+      }
+      
+      // Create new transaction document
+      const newTransaction = {
+        amount: parseFloat(data.amount),
+        date: data.date ? new Date(data.date) : new Date(),
+        description: data.description,
+        type: data.type,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      // Insert into database
+      const result = await transactions.insertOne(newTransaction);
+      console.log('Transaction created with ID:', result.insertedId);
+      
       return res.status(201).json({
         transaction: {
-          id: savedTransaction._id.toString(),
-          amount: savedTransaction.amount,
-          date: savedTransaction.date,
-          description: savedTransaction.description,
-          type: savedTransaction.type
+          id: result.insertedId.toString(),
+          ...newTransaction,
+          date: newTransaction.date.toISOString()
         }
       });
     }
     
     // Method not allowed
     return res.status(405).json({ message: 'Method not allowed' });
-  } catch (error) {
-    console.error('API error:', error.message, error.stack);
     
-    // Return a more detailed error response
-    return res.status(500).json({ 
+  } catch (error) {
+    console.error('API error:', error);
+    
+    return res.status(500).json({
       message: 'Internal server error',
       error: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-      mongodbUri: process.env.MONGODB_URI ? 'URI is defined' : 'URI is missing',
-      timestamps: new Date().toISOString(),
-      connectionState: mongoose.connection ? mongoose.connection.readyState : 'no connection'
+      timestamps: new Date().toISOString()
     });
   }
 } 

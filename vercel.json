@@ -2,5 +2,14 @@
   "version": 2,
   "buildCommand": "npm run build",
   "installCommand": "npm install",
-  "framework": "vite"
+  "framework": "vite",
+  "functions": {
+    "api/*.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
+  "env": {
+    "NODE_ENV": "production"
+  }
 } 
