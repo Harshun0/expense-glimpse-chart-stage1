@@ -1,13 +1,15 @@
 import mongoose from 'mongoose';
 
-// Track if we've connected to MongoDB
-let isConnected = false;
+// Cached connection promise
+let cachedConnection = null;
 
-// A more robust connection function
+// Connection function specifically optimized for serverless
 const connectToDB = async () => {
-  if (isConnected) {
+  // If connection exists and is ready, use it
+  if (cachedConnection && 
+      mongoose.connection.readyState === 1) {
     console.log('Using existing MongoDB connection');
-    return;
+    return mongoose.connection;
   }
   
   try {
@@ -16,22 +18,36 @@ const connectToDB = async () => {
       throw new Error('MONGODB_URI environment variable is not defined');
     }
     
-    // Connect with more options
-    await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      bufferCommands: false,
-    });
+    // Important for serverless: set global configurations before connecting
+    mongoose.set('strictQuery', true);
     
-    isConnected = true;
-    console.log("Successfully connected to MongoDB");
+    // Create a new connection promise if we don't have one
+    if (!cachedConnection) {
+      console.log('Creating new MongoDB connection promise');
+      cachedConnection = mongoose.connect(process.env.MONGODB_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        // Set a reasonable timeout
+        serverSelectionTimeoutMS: 10000,
+        // This is critical for serverless environments
+        bufferCommands: true,
+      });
+    }
+    
+    // Wait for the connection
+    console.log('Awaiting MongoDB connection...');
+    await cachedConnection;
+    
+    console.log('MongoDB connected successfully:', mongoose.connection.readyState);
+    return mongoose.connection;
   } catch (error) {
-    console.error("Failed to connect to MongoDB:", error);
+    console.error('MongoDB connection error:', error);
+    cachedConnection = null;
     throw error;
   }
 };
 
-// Define Schema
+// Define Schema - outside handler to optimize cold starts
 const TransactionSchema = new mongoose.Schema({
   amount: { type: Number, required: true, min: 0.01 },
   date: { type: Date, required: true, default: Date.now },
@@ -39,15 +55,16 @@ const TransactionSchema = new mongoose.Schema({
   type: { type: String, enum: ['income', 'expense'], required: true },
 }, { timestamps: true });
 
-// Use existing model or create new one
-let Transaction;
-try {
-  // Try to get an existing model
-  Transaction = mongoose.model('Transaction');
-} catch (error) {
-  // Or create a new one
-  Transaction = mongoose.model('Transaction', TransactionSchema);
-}
+// Create model function - called after connection is established
+const getTransactionModel = () => {
+  try {
+    // Try to reuse existing model
+    return mongoose.models.Transaction || mongoose.model('Transaction', TransactionSchema);
+  } catch (error) {
+    // If error, create new model
+    return mongoose.model('Transaction', TransactionSchema);
+  }
+};
 
 export default async function handler(req, res) {
   // Set CORS headers
@@ -69,13 +86,19 @@ export default async function handler(req, res) {
   console.log(`API request: ${req.method} ${req.url}`);
   
   try {
-    // Try to connect to MongoDB
+    // Connect to MongoDB - wait for full connection
+    console.log('Initial connection state:', mongoose.connection.readyState);
     await connectToDB();
+    console.log('Final connection state:', mongoose.connection.readyState);
+    
+    // Get Transaction model - only after connection is established
+    const Transaction = getTransactionModel();
     
     // GET all transactions
     if (req.method === 'GET') {
       console.log('Fetching all transactions');
-      const transactions = await Transaction.find().sort({ date: -1 });
+      // Use exec() to ensure promise is returned
+      const transactions = await Transaction.find().sort({ date: -1 }).exec();
       
       console.log(`Found ${transactions.length} transactions`);
       return res.status(200).json({
@@ -118,7 +141,8 @@ export default async function handler(req, res) {
       error: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
       mongodbUri: process.env.MONGODB_URI ? 'URI is defined' : 'URI is missing',
-      timestamps: new Date().toISOString()
+      timestamps: new Date().toISOString(),
+      connectionState: mongoose.connection ? mongoose.connection.readyState : 'no connection'
     });
   }
 } 
