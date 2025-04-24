@@ -1,41 +1,89 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
 import cors from 'cors';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import path from 'path';
-import TransactionModel from './models/Transaction.js';
+import dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
 
-// Initialize Express app
+// Create Express app
 const app = express();
-
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Connect to MongoDB
+// MongoDB connection
 const MONGODB_URI = process.env.MONGODB_URI;
-
 if (!MONGODB_URI) {
-  console.error('Please define the MONGODB_URI environment variable');
-  process.exit(1);
+  console.error('MONGODB_URI environment variable is not defined');
 }
 
-mongoose.connect(MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => {
-    console.error('Failed to connect to MongoDB', err);
-  });
+// MongoDB Schema and Model
+const TransactionSchema = new mongoose.Schema(
+  {
+    amount: {
+      type: Number,
+      required: [true, 'Amount is required'],
+      min: [0.01, 'Amount must be greater than 0'],
+    },
+    date: {
+      type: Date,
+      required: [true, 'Date is required'],
+      default: Date.now,
+    },
+    description: {
+      type: String,
+      required: [true, 'Description is required'],
+      trim: true,
+    },
+    type: {
+      type: String,
+      enum: ['income', 'expense'],
+      required: [true, 'Type is required'],
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+// Create the model or use existing one
+let TransactionModel;
+try {
+  TransactionModel = mongoose.model('Transaction');
+} catch {
+  TransactionModel = mongoose.model('Transaction', TransactionSchema);
+}
+
+// Connect to MongoDB
+let cachedConnection = null;
+
+async function connectToDatabase() {
+  if (cachedConnection) {
+    return cachedConnection;
+  }
+
+  try {
+    const conn = await mongoose.connect(MONGODB_URI, {
+      bufferCommands: false,
+    });
+    
+    cachedConnection = conn;
+    return conn;
+  } catch (error) {
+    console.error('MongoDB connection error:', error);
+    throw error;
+  }
+}
 
 // API Routes
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
 
 // GET all transactions
 app.get('/api/transactions', async (req, res) => {
   try {
+    await connectToDatabase();
     const transactions = await TransactionModel.find().sort({ date: -1 });
     res.json({ 
       transactions: transactions.map(doc => ({
@@ -55,6 +103,7 @@ app.get('/api/transactions', async (req, res) => {
 // POST new transaction
 app.post('/api/transactions', async (req, res) => {
   try {
+    await connectToDatabase();
     const { amount, date, description, type } = req.body;
     const transaction = new TransactionModel({
       amount,
@@ -83,6 +132,7 @@ app.post('/api/transactions', async (req, res) => {
 // PUT update transaction
 app.put('/api/transactions/:id', async (req, res) => {
   try {
+    await connectToDatabase();
     const { id } = req.params;
     const { amount, date, description, type } = req.body;
     
@@ -114,6 +164,7 @@ app.put('/api/transactions/:id', async (req, res) => {
 // DELETE transaction
 app.delete('/api/transactions/:id', async (req, res) => {
   try {
+    await connectToDatabase();
     const { id } = req.params;
     
     const deletedTransaction = await TransactionModel.findByIdAndDelete(id);
@@ -129,18 +180,10 @@ app.delete('/api/transactions/:id', async (req, res) => {
   }
 });
 
-// Health check route for Vercel
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString() });
+// Fallback for other routes
+app.use('*', (req, res) => {
+  res.status(404).json({ message: 'API route not found' });
 });
 
-// Keep for Vercel serverless functions
-export default app;
-
-// For local development
-if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-} 
+// Export the Express API
+export default app; 
