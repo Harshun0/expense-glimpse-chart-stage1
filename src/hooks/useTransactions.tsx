@@ -1,68 +1,40 @@
-
 import { useState, useEffect } from 'react';
-import { Transaction, TransactionFormData, TransactionType } from '@/types/transaction';
+import { Transaction, TransactionFormData } from '@/types/transaction';
 import { useToast } from '@/components/ui/use-toast';
-
-// Sample initial data
-const initialTransactions: Transaction[] = [
-  {
-    id: '1',
-    amount: 2500,
-    date: new Date(2023, 3, 1),
-    description: 'Salary',
-    type: 'income',
-  },
-  {
-    id: '2',
-    amount: 800,
-    date: new Date(2023, 3, 5),
-    description: 'Rent',
-    type: 'expense',
-  },
-  {
-    id: '3',
-    amount: 120,
-    date: new Date(2023, 3, 8),
-    description: 'Groceries',
-    type: 'expense',
-  },
-  {
-    id: '4',
-    amount: 45,
-    date: new Date(2023, 3, 12),
-    description: 'Dinner',
-    type: 'expense',
-  },
-  {
-    id: '5',
-    amount: 500,
-    date: new Date(2023, 3, 15),
-    description: 'Freelance Work',
-    type: 'income',
-  },
-  {
-    id: '6',
-    amount: 95,
-    date: new Date(2023, 3, 18),
-    description: 'Utilities',
-    type: 'expense',
-  },
-];
+import { TransactionAPI } from '@/lib/api';
 
 export function useTransactions() {
   const { toast } = useToast();
-  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
-  const addTransaction = (transactionData: TransactionFormData) => {
+  // Fetch transactions on mount
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        const data = await TransactionAPI.getAll();
+        setTransactions(data);
+      } catch (error) {
+        console.error('Failed to fetch transactions:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load transactions",
+          variant: "destructive",
+        });
+      } finally {
+        setIsInitialLoading(false);
+      }
+    };
+
+    fetchTransactions();
+  }, [toast]);
+
+  const addTransaction = async (transactionData: TransactionFormData) => {
     setIsLoading(true);
     try {
-      const newTransaction: Transaction = {
-        ...transactionData,
-        id: Date.now().toString(),
-      };
-      
+      const newTransaction = await TransactionAPI.add(transactionData);
       setTransactions(prev => [newTransaction, ...prev]);
       toast({
         title: "Success",
@@ -80,13 +52,14 @@ export function useTransactions() {
     }
   };
 
-  const updateTransaction = (id: string, transactionData: TransactionFormData) => {
+  const updateTransaction = async (id: string, transactionData: TransactionFormData) => {
     setIsLoading(true);
     try {
+      const updatedTransaction = await TransactionAPI.update(id, transactionData);
       setTransactions(prev => 
         prev.map(transaction => 
           transaction.id === id 
-            ? { ...transaction, ...transactionData } 
+            ? updatedTransaction 
             : transaction
         )
       );
@@ -107,9 +80,10 @@ export function useTransactions() {
     }
   };
 
-  const deleteTransaction = (id: string) => {
+  const deleteTransaction = async (id: string) => {
     setIsLoading(true);
     try {
+      await TransactionAPI.delete(id);
       setTransactions(prev => prev.filter(transaction => transaction.id !== id));
       toast({
         title: "Success",
@@ -164,6 +138,7 @@ export function useTransactions() {
   return {
     transactions,
     isLoading,
+    isInitialLoading,
     addTransaction,
     updateTransaction,
     deleteTransaction,

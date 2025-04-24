@@ -1,73 +1,103 @@
-# Welcome to your Lovable project
+# Expense Glimpse Chart
 
-## Project info
+A simple web application for tracking personal finances in Indian Rupees (₹).
 
-**URL**: https://lovable.dev/projects/496a70d4-4514-4590-a44a-37e5738ec271
+## Features
 
-## How can I edit this code?
+- Add, edit, and delete transactions (amount, date, description, type)
+- View transactions in a list with filtering and sorting options
+- Visualize monthly income and expenses with bar charts
+- Track overall balance, total income, and total expenses
+- Responsive design with loading states and form validation
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS, shadcn/ui
+- **Data Visualization:** Recharts
+- **Form Handling:** React Hook Form, Zod validation
+- **Database:** MongoDB
+- **Backend:** Express, Mongoose
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/496a70d4-4514-4590-a44a-37e5738ec271) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+Make sure you have the following installed:
+- Node.js (v14 or later)
+- npm
+- MongoDB Atlas account (for database)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Installation
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+1. Clone the repository:
+   ```sh
+   git clone https://github.com/harshnebhnani/expense-glimpse-chart.git
+   cd expense-glimpse-chart
+   ```
 
-Follow these steps:
+2. Install dependencies:
+   ```sh
+   npm install
+   ```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+3. Set up MongoDB Atlas:
+   - Create a free account at [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register)
+   - Create a new cluster
+   - Under Security > Database Access, create a new database user with read/write privileges
+   - Under Security > Network Access, add your IP address to the allowlist
+   - Under Databases > Connect, click "Connect your application" and copy the connection string
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+4. Create a `.env` file in the root directory with your MongoDB connection string:
+   ```
+   MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/<db-name>?retryWrites=true&w=majority
+   ```
 
-# Step 3: Install the necessary dependencies.
-npm i
+   Replace `<username>`, `<password>`, `<cluster-url>`, and `<db-name>` with your MongoDB Atlas credentials.
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+5. Start the development servers:
+   ```sh
+   # In one terminal, start the backend server
+   npm run dev:server
+   
+   # In another terminal, start the frontend
+   npm run dev
+   ```
+
+6. Open your browser and navigate to `http://localhost:8080`
+
+## Deployment
+
+1. Build the frontend:
+   ```sh
+   npm run build
+   ```
+
+2. Start the production server:
+   ```sh
+   npm start
+   ```
+
+## Project Structure
+
+```
+expense-glimpse-chart/
+├── src/                    # Frontend source files
+│   ├── components/         # React components
+│   ├── hooks/              # Custom React hooks
+│   ├── lib/                # Utility functions and API client
+│   ├── models/             # Mongoose models (TypeScript)
+│   ├── pages/              # Application pages
+│   └── types/              # TypeScript type definitions
+├── server/                 # Backend server code
+│   └── models/             # Mongoose models (JavaScript)
+├── public/                 # Static assets
+└── .env                    # Environment variables (not checked into git)
 ```
 
-**Edit a file directly in GitHub**
+## Contributing
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/496a70d4-4514-4590-a44a-37e5738ec271) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request

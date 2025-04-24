@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   BarChart,
@@ -35,7 +34,7 @@ const CustomTooltip = ({
         <p className="font-medium">{label}</p>
         {payload.map((entry, index) => (
           <p key={index} style={{ color: entry.color }}>
-            {`${entry.name}: $${entry.value?.toFixed(2)}`}
+            {`${entry.name}: ₹${entry.value?.toFixed(2)}`}
           </p>
         ))}
       </div>
@@ -69,7 +68,7 @@ export function ExpenseChart({ data }: ExpenseChartProps) {
             />
             <YAxis 
               tick={{ fontSize: isMobile ? 10 : 12 }}
-              tickFormatter={(value) => `$${value}`}
+              tickFormatter={(value) => `₹${value}`}
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend />

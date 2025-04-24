@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { format } from 'date-fns';
 import { Transaction } from '@/types/transaction';
@@ -22,7 +21,7 @@ export function TransactionItem({ transaction, onEdit, onDelete }: TransactionIt
           <div 
             className={cn(
               "w-3 h-3 rounded-full",
-              type === 'income' ? 'bg-secondary' : 'bg-accent'
+              type === 'income' ? 'bg-green-500' : 'bg-orange-500'
             )} 
           />
           <h3 className="font-medium">{description}</h3>
@@ -34,10 +33,10 @@ export function TransactionItem({ transaction, onEdit, onDelete }: TransactionIt
         <span 
           className={cn(
             "font-semibold mr-4",
-            type === 'income' ? 'text-secondary' : 'text-accent'
+            type === 'income' ? 'text-green-500' : 'text-orange-500'
           )}
         >
-          {type === 'income' ? '+' : '-'} ${amount.toFixed(2)}
+          {type === 'income' ? '+' : '-'} ₹{amount.toFixed(2)}
         </span>
         
         <div className="flex gap-2">
@@ -54,7 +53,7 @@ export function TransactionItem({ transaction, onEdit, onDelete }: TransactionIt
             size="icon"
             onClick={() => onDelete(id)}
           >
-            <Trash2 className="h-4 w-4 text-destructive" />
+            <Trash2 className="h-4 w-4 text-red-500" />
             <span className="sr-only">Delete</span>
           </Button>
         </div>
